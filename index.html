@@ -70,6 +70,12 @@ table.lines .inp{padding:7px 8px;font-size:14px}
 .pdf-mode .tbl-wrap{overflow:visible}
 
 .addline{margin-top:10px}
+.bandtot{display:none;flex-direction:column;gap:4px;margin-top:16px;padding:12px 14px;background:#faf8f0;border:1px solid var(--line);border-radius:10px;max-width:340px;margin-left:auto}
+.stage-rh1 .bandtot,.stage-dir .bandtot,.stage-rh2 .bandtot{display:flex}
+.bandtot .bt-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:baseline;font-size:13px}
+.bandtot .bt-l{color:var(--mut)}
+.bandtot .bt-h{font-weight:700;min-width:48px;text-align:right}
+.bandtot .bt-e{font-weight:700;min-width:74px;text-align:right;color:var(--acc-d)}
 .tot{display:flex;justify-content:flex-end;gap:14px;align-items:center;margin-top:16px;font-size:15px}
 .tot b{font-size:20px;color:var(--acc-d)}
 
@@ -127,7 +133,7 @@ input[type=number]{-moz-appearance:textfield}
 
 <div id="wrap">
  <div id="doc" class="stage-saisie">
-  <div class="fhdr">
+  <div class="fhdr" id="fhdr-el">
     <div><div class="logo-b" id="logo-b">EDGARD</div><div class="logo-s" id="logo-s">Opticiens</div></div>
     <div class="hline"></div>
     <div class="htitle">
@@ -136,7 +142,7 @@ input[type=number]{-moz-appearance:textfield}
     </div>
   </div>
 
-  <div class="fbody">
+  <div class="fbody" id="fbody-el">
 
     <div id="formErr"></div>
 
@@ -205,6 +211,12 @@ input[type=number]{-moz-appearance:textfield}
     </table>
     </div>
     <button class="btn btn-ol addline" id="btn-add" onclick="addRow()">＋ Ajouter une ligne</button>
+
+    <div id="bandTotals" class="bandtot">
+      <div class="bt-row"><span class="bt-l">Total HS à 25 %</span><span class="bt-h" id="sum25h">0 h</span><span class="bt-e" id="sum25e">—</span></div>
+      <div class="bt-row"><span class="bt-l">Total HS à 50 %</span><span class="bt-h" id="sum50h">0 h</span><span class="bt-e" id="sum50e">—</span></div>
+      <div class="bt-row"><span class="bt-l">Total heures normales</span><span class="bt-h" id="sumnh">0 h</span><span class="bt-e" id="sumne">—</span></div>
+    </div>
 
     <div class="tot">
       <span>TOTAL À PAYER</span><b id="grandTotal">—</b>
@@ -453,10 +465,22 @@ function lineMontant(id){
   updTotal();
 }
 function recalcAll(){rowIds().forEach(recalcLine)}
+function fmtH(n){return (Number.isInteger(n)?n:(Math.round(n*100)/100).toString().replace('.',','))+' h'}
 function updTotal(){
-  var t=0,any=false;
-  rowIds().forEach(function(id){var v=parseFloat(ge('r'+id).querySelector('.r-mt').value);if(!isNaN(v)){t+=v;any=true}});
+  var t=0,any=false,s25=0,s50=0,sn=0;
+  var taux=parseFloat(gv('taux35'))||0;
+  rowIds().forEach(function(id){
+    var tr=ge('r'+id);
+    var v=parseFloat(tr.querySelector('.r-mt').value);if(!isNaN(v)){t+=v;any=true}
+    s25+=parseFloat(tr.querySelector('.r-h25').value)||0;
+    s50+=parseFloat(tr.querySelector('.r-h50').value)||0;
+    sn +=parseFloat(tr.querySelector('.r-hn').value)||0;
+  });
   ge('grandTotal').textContent= any? t.toFixed(2).replace('.',',')+' €':'—';
+  ge('sum25h').textContent=fmtH(s25); ge('sum50h').textContent=fmtH(s50); ge('sumnh').textContent=fmtH(sn);
+  ge('sum25e').textContent= taux? fmtEur(s25*taux*1.25):'—';
+  ge('sum50e').textContent= taux? fmtEur(s50*taux*1.5):'—';
+  ge('sumne').textContent = taux? fmtEur(sn*taux):'—';
 }
 
 /* ============================ SOCIÉTÉ / BRANDING ============================ */
@@ -758,25 +782,48 @@ function exportPDF(){
   setTimeout(function(){
     var frozen=freezeControls(doc);
     function restore(){unfreeze(frozen);doc.classList.remove('pdf-mode');doc.style.width=prevDocW;wrap.style.maxWidth=prevMax;}
-    html2canvas(doc,{scale:2,backgroundColor:'#ffffff',useCORS:true,width:780,windowWidth:860,scrollX:0,scrollY:0}).then(function(canvas){
-      restore();
-      var jsPDF=window.jspdf.jsPDF,pdf=new jsPDF('p','mm','a4');
-      var pw=210,ph=297,m=10,iw=pw-2*m,ih=canvas.height*iw/canvas.width;
-      if(ih<=ph-2*m){ pdf.addImage(canvas.toDataURL('image/jpeg',0.95),'JPEG',m,m,iw,ih); }
-      else{
-        var pageH=ph-2*m,sliceH=canvas.width*pageH/iw,y=0;
-        while(y<canvas.height){
-          var hh=Math.min(sliceH,canvas.height-y);
-          var c2=document.createElement('canvas');c2.width=canvas.width;c2.height=hh;
-          c2.getContext('2d').drawImage(canvas,0,y,canvas.width,hh,0,0,canvas.width,hh);
-          if(y>0)pdf.addPage();
-          pdf.addImage(c2.toDataURL('image/jpeg',0.95),'JPEG',m,m,iw,hh*iw/canvas.width);
+    var opt={scale:2,backgroundColor:'#ffffff',useCORS:true,width:780,windowWidth:860,scrollX:0,scrollY:0};
+    var jsPDF=window.jspdf.jsPDF,pdf=new jsPDF('p','mm','a4');
+    var pw=210,ph=297,m=10,iw=pw-2*m,pageBody=ph-2*m;
+    function save(){var fn=('HS_'+(gv('nom')||'salarie').toUpperCase()+'_'+(gv('prenom')||'')+'_'+gv('payM')+'-'+gv('payY')+'.pdf').replace(/\s+/g,'_');pdf.save(fn);}
+    function fail(e){restore();toast('Erreur PDF : '+(e&&e.message?e.message:e));}
+    html2canvas(doc,opt).then(function(canvas){
+      var ih=canvas.height*iw/canvas.width;
+      // 1) tient sur une page -> une page pleine
+      if(ih<=pageBody){
+        restore();
+        pdf.addImage(canvas.toDataURL('image/jpeg',0.96),'JPEG',m,m,iw,ih);
+        save();return;
+      }
+      // 2) un peu trop grand -> réduction homothétique pour rester sur une page (jusqu'à 72%)
+      var scale=pageBody/ih;
+      if(scale>=0.72){
+        restore();
+        var w2=iw*scale, x2=m+(iw-w2)/2;
+        pdf.addImage(canvas.toDataURL('image/jpeg',0.96),'JPEG',x2,m,w2,pageBody);
+        save();return;
+      }
+      // 3) vraiment trop long -> plusieurs pages avec en-tête répété
+      Promise.all([html2canvas(ge('fhdr-el'),opt),html2canvas(ge('fbody-el'),opt)]).then(function(res){
+        restore();
+        var hc=res[0],bc=res[1];
+        var headerH=hc.height*iw/hc.width;
+        var bodyTop=m+headerH+3;
+        var availMm=ph-bodyTop-m;
+        var sliceH=availMm*bc.width/iw, y=0, first=true;
+        while(y<bc.height){
+          if(!first)pdf.addPage();
+          first=false;
+          pdf.addImage(hc.toDataURL('image/jpeg',0.96),'JPEG',m,m,iw,headerH);
+          var hh=Math.min(sliceH,bc.height-y);
+          var c2=document.createElement('canvas');c2.width=bc.width;c2.height=hh;
+          c2.getContext('2d').drawImage(bc,0,y,bc.width,hh,0,0,bc.width,hh);
+          pdf.addImage(c2.toDataURL('image/jpeg',0.96),'JPEG',m,bodyTop,iw,hh*iw/bc.width);
           y+=sliceH;
         }
-      }
-      var fn=('HS_'+(gv('nom')||'salarie').toUpperCase()+'_'+(gv('prenom')||'')+'_'+gv('payM')+'-'+gv('payY')+'.pdf').replace(/\s+/g,'_');
-      pdf.save(fn);
-    }).catch(function(e){restore();toast('Erreur PDF : '+e.message);});
+        save();
+      }).catch(fail);
+    }).catch(fail);
   },120);
 }
 
