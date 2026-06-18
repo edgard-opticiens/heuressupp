@@ -59,7 +59,8 @@ table.lines .inp{padding:7px 8px;font-size:14px}
 .rh-cell{display:none;flex-direction:column;gap:3px;font-size:11px}
 .stage-rh1 .rh-cell,.stage-dir .rh-cell,.stage-rh2 .rh-cell{display:flex}
 .rh-cell .fer{font-size:11px;color:var(--mut);display:flex;align-items:center;gap:4px}
-.rh-cell .rgrid{display:grid;grid-template-columns:auto 60px;gap:3px 6px;align-items:center}
+.rh-cell .rgrid{display:grid;grid-template-columns:auto 56px auto;gap:3px 6px;align-items:center}
+.rh-cell .amt{font-size:11px;font-weight:600;text-align:right;white-space:nowrap;color:var(--ink);min-width:54px}
 .rh-cell .lab{color:var(--mut);font-size:10.5px;white-space:nowrap}
 .rh-cell .mini{width:100%;padding:3px 5px;border:1px solid var(--line);border-radius:6px;font-size:11.5px;text-align:center;background:#fff}
 .rh-cell .rmt{display:flex;align-items:center;gap:5px;margin-top:3px}
@@ -386,9 +387,9 @@ function buildRhCell(id,data){
   ge('rh'+id).innerHTML=
     '<label class="fer"><input type="checkbox" class="r-fer" onchange="recalcLine('+id+')" '+(data.ferie?'checked':'')+'> férié</label>'+
     '<div class="rgrid">'+
-      '<span class="lab">25 %</span><input class="mini r-h25" type="number" step="0.5" min="0" value="'+(data.h25!=null?data.h25:'')+'" oninput="onBandEdit('+id+')">'+
-      '<span class="lab">50 %</span><input class="mini r-h50" type="number" step="0.5" min="0" value="'+(data.h50!=null?data.h50:'')+'" oninput="onBandEdit('+id+')">'+
-      '<span class="lab">Normales</span><input class="mini r-hn" type="number" step="0.5" min="0" value="'+(data.hn!=null?data.hn:'')+'" oninput="onBandEdit('+id+')">'+
+      '<span class="lab">25 %</span><input class="mini r-h25" type="number" step="0.5" min="0" value="'+(data.h25!=null?data.h25:'')+'" oninput="onBandEdit('+id+')"><span class="amt" id="amt25-'+id+'"></span>'+
+      '<span class="lab">50 %</span><input class="mini r-h50" type="number" step="0.5" min="0" value="'+(data.h50!=null?data.h50:'')+'" oninput="onBandEdit('+id+')"><span class="amt" id="amt50-'+id+'"></span>'+
+      '<span class="lab">Normales</span><input class="mini r-hn" type="number" step="0.5" min="0" value="'+(data.hn!=null?data.hn:'')+'" oninput="onBandEdit('+id+')"><span class="amt" id="amtn-'+id+'"></span>'+
     '</div>'+
     '<div class="rmt"><span class="lab">Total</span><input class="mon r-mt" type="number" step="0.01" min="0" value="'+(data.montant!=null?data.montant:'')+'" oninput="updTotal()"><span class="lab">€</span></div>'+
     '<div class="recap" id="rhlbl'+id+'"></div>';
@@ -430,14 +431,20 @@ function recalcLine(id){
   lineMontant(id);
 }
 function onBandEdit(id){lineMontant(id)}
+function fmtEur(n){return n.toFixed(2).replace('.',',')+' €'}
 function lineMontant(id){
   var tr=ge('r'+id);if(!tr)return;
   var taux=parseFloat(gv('taux35'))||0;
   var h25=parseFloat(tr.querySelector('.r-h25').value)||0;
   var h50=parseFloat(tr.querySelector('.r-h50').value)||0;
   var hn=parseFloat(tr.querySelector('.r-hn').value)||0;
-  var mt=hn*taux + h25*taux*1.25 + h50*taux*1.5;
+  var a25=h25*taux*1.25, a50=h50*taux*1.5, an=hn*taux;
+  var mt=an+a25+a50;
   tr.querySelector('.r-mt').value= taux? round2(mt):'';
+  var s25=ge('amt25-'+id),s50=ge('amt50-'+id),sn=ge('amtn-'+id);
+  if(s25)s25.textContent=(taux&&h25)?fmtEur(a25):'';
+  if(s50)s50.textContent=(taux&&h50)?fmtEur(a50):'';
+  if(sn)sn.textContent=(taux&&hn)?fmtEur(an):'';
   var parts=[];
   if(h25)parts.push(h25+'h à 25%');
   if(h50)parts.push(h50+'h à 50%');
