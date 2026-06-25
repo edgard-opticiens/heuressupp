@@ -52,6 +52,7 @@ table.lines th{font-size:11px;text-transform:uppercase;letter-spacing:.3px;color
 table.lines td{padding:6px 6px;border-bottom:1px solid var(--line);vertical-align:top}
 table.lines .inp{padding:7px 8px;font-size:14px}
 .col-s{width:58px}.col-h{width:62px}.col-rh{width:178px}.col-act{width:22px}
+.cell-num{position:relative}
 .cell-num input{text-align:center}
 .act-cell{border:0!important;background:transparent;padding:6px 0!important;text-align:center}
 .del{background:none;border:0;color:var(--warn);cursor:pointer;font-size:18px;line-height:1;padding:4px}
@@ -98,7 +99,8 @@ table.lines .inp{padding:7px 8px;font-size:14px}
 .pdf-mode #formErr{display:none!important}
 .legend{margin-top:18px;font-size:11.5px;color:var(--mut);line-height:1.5}
 .legend .info{margin-top:6px;padding:9px 11px;background:#faf8f0;border-left:3px solid var(--acc);border-radius:4px}
-.err{color:var(--warn);font-size:12px;font-weight:600;margin-top:4px;min-height:14px}
+.weekerr{display:none;margin-top:12px;padding:9px 12px;background:#fdecec;border:1px solid #f0c0c0;color:var(--warn);border-radius:8px;font-size:12.5px;font-weight:600;line-height:1.4}
+.weekerr.show{display:block}
 .hint{font-size:12px;color:var(--mut);margin-top:5px}
 
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:60;padding:16px}
@@ -210,6 +212,7 @@ input[type=number]{-moz-appearance:textfield}
       <tbody id="rows"></tbody>
     </table>
     </div>
+    <div id="weekErr" class="weekerr"></div>
     <button class="btn btn-ol addline" id="btn-add" onclick="addRow()">＋ Ajouter une ligne</button>
 
     <div id="bandTotals" class="bandtot">
@@ -384,7 +387,7 @@ function addRow(data){
   data=data||{};
   var id=++rowSeq, tr=document.createElement('tr'); tr.id='r'+id;
   tr.innerHTML=
-    '<td class="cell-num"><input class="inp r-s" type="number" min="1" max="53" placeholder="ex 24" value="'+(data.s||'')+'" oninput="onWeek('+id+')"><div class="err" id="err'+id+'"></div></td>'+
+    '<td class="cell-num"><input class="inp r-s" type="number" min="1" max="53" placeholder="ex 24" value="'+(data.s||'')+'" oninput="onWeek('+id+')"></td>'+
     '<td class="cell-num"><input class="inp r-h" type="number" min="0" step="0.5" placeholder="0" value="'+(data.h!=null?data.h:'')+'" oninput="recalcLine('+id+')"></td>'+
     '<td><input class="inp r-m" placeholder="ex : Sur-activité" value="'+escAttr(data.motif)+'"></td>'+
     '<td><div class="rh-cell" id="rh'+id+'"></div></td>'+
@@ -409,15 +412,18 @@ function buildRhCell(id,data){
 function delRow(id){var r=ge('r'+id);if(r)r.remove();updTotal()}
 function rowIds(){return Array.prototype.map.call(ge('rows').children,function(tr){return +tr.id.slice(1)})}
 
+function showWeekErr(msg){var e=ge('weekErr');e.textContent=msg;e.classList.add('show');}
+function hideWeekErr(){var e=ge('weekErr');if(e){e.classList.remove('show');e.textContent='';}}
 function onWeek(id){
   var tr=ge('r'+id);if(!tr)return;
-  var inp=tr.querySelector('.r-s'),w=parseInt(inp.value,10),err=ge('err'+id);
-  err.textContent='';
+  var inp=tr.querySelector('.r-s'),w=parseInt(inp.value,10);
+  hideWeekErr();
   if(!w)return;
   var y=+gv('payY'),m=+gv('payM');
-  if(w<1||w>53){err.textContent='Semaine invalide';return}
+  if(w<1||w>53){showWeekErr('Semaine invalide ('+inp.value+').');inp.value='';return}
   if(!weekAllowed(w,y,m)){
-    err.textContent='Semaine ≥ '+cutoffWeek(y,m).week+' non payable sur ce mois (le 27 tombe en semaine '+cutoffWeek(y,m).week+').';
+    var mois=ge('payM').options[ge('payM').selectedIndex].text;
+    showWeekErr('Semaine '+w+' non payable sur '+mois+' '+y+' : le 27 tombe en semaine '+cutoffWeek(y,m).week+'. Elle sera payable le mois suivant.');
     inp.value=''; return;
   }
   tr.querySelector('.r-fer').checked=weekHasHoliday(w,y,m);
