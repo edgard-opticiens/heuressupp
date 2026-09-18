@@ -311,6 +311,7 @@ input[type=number]{-moz-appearance:textfield}
 var RH_EMAIL='ressources-humaines@groupe-edgard.com';
 var DIR_EMAIL='j.deruy@groupe-edgard.com';                       // Direction (M. DERUY)
 var RESEAU_EMAILS=['j.petit@groupe-edgard.com','r.guittard@groupe-edgard.com']; // Directeurs Réseau (GdO)
+var HS_RESEAU_WEBHOOK='https://edgard-opticiens.app.n8n.cloud/webhook/hs-reseau'; // anti double-signature Réseau
 
 var EDGARD_DEV='Edgard Développement';
 var EDGARD_MAG=['Ango','Biarro','Bordo','Caenpo','Giro','Havro','Jisam','Lyono','Manso','Marseillo','Nanceo','Nanto','Niceo','Orlo','Reimo','Strabo','Turo'];
@@ -713,6 +714,7 @@ function sendToRH(){
     showFormErr([]);
   }else if(MODE==='reseau'){
     if(!hasSig('reseau')){toast('Signature du Directeur Réseau requise');return}
+    hsMarkSigneReseau();
   }
   toast('Création du lien…');
   shorten(makeLink(collect('rh1')),function(link){
@@ -737,6 +739,32 @@ function sendBackRH(){
   });
 }
 
+/* ===================== ANTI DOUBLE-SIGNATURE RÉSEAU ===================== */
+function hsCle(){
+  return (gv('societe')||'').toUpperCase().replace(/[^A-Z0-9]+/g,'_')+'_'+
+         (gv('nom')||'').toUpperCase().replace(/[^A-Z0-9]+/g,'_')+'_'+
+         (gv('prenom')||'').toUpperCase().replace(/[^A-Z0-9]+/g,'_')+'_'+
+         (gv('payY')||'')+'-'+('0'+(gv('payM')||'')).slice(-2);
+}
+function hsCheckReseau(){
+  fetch(HS_RESEAU_WEBHOOK,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'check',cle:hsCle(),nom:gv('nom'),prenom:gv('prenom')})})
+    .then(function(r){return r.json()})
+    .then(function(d){if(d&&d.signe){hsLockAlreadySigned();}})
+    .catch(function(){});
+}
+function hsLockAlreadySigned(){
+  var pad=ge('pad-reseau');pad.classList.add('locked');
+  var clr=pad.parentNode.querySelector('.clr');if(clr)clr.style.display='none';
+  var ph=pad.querySelector('.ph');if(ph)ph.style.display='none';
+  ge('btn-rh').disabled=true;
+  showFormErr(['Cette demande a déjà été signée par un autre Directeur Réseau et transmise au RH — aucune action supplémentaire n’est nécessaire de votre part.']);
+}
+function hsMarkSigneReseau(){
+  fetch(HS_RESEAU_WEBHOOK,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'signer',cle:hsCle(),nom:gv('nom'),prenom:gv('prenom')})}).catch(function(){});
+}
+
 /* ============================ CHARGEMENT ÉTAT ============================ */
 function loadPayload(){
   var q=new URLSearchParams(window.location.search),s=q.get('s');if(!s)return false;
@@ -752,6 +780,7 @@ function loadPayload(){
   if(p.sigT){['sal','dir','reseau','direction'].forEach(function(k){sigTime[k]=p.sigT[k]||'';renderTime(k);});}
   updSoc();          // branding + applyMode
   refreshHints();updTotal();
+  if(MODE==='reseau'){hsCheckReseau();}
   return true;
 }
 function resetForm(){if(confirm('Réinitialiser le formulaire ?'))window.location.href=baseUrl();}
